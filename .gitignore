@@ -28,13 +28,15 @@ node_modules/
 package-lock.json
 package.json
 
-# Environment variables
-.env
-
 # IDE
 .idea/
-.vscode/
 *.iml
+
+# Flutter metadata
+.metadata
+
+# Environment
+.env
 
 # OS
 .DS_Store
