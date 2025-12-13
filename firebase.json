@@ -1,0 +1,36 @@
+{
+  "flutter": {
+    "platforms": {
+      "android": {
+        "default": {
+          "projectId": "future-gaming-app-iet",
+          "appId": "1:1000026373612:android:b2962f83c3127c6d7294c9",
+          "fileOutput": "android/app/google-services.json"
+        }
+      },
+      "dart": {
+        "lib/firebase_options.dart": {
+          "projectId": "future-gaming-app-iet",
+          "configurations": {
+            "android": "1:1000026373612:android:b2962f83c3127c6d7294c9",
+            "web": "1:1000026373612:web:2314766c5d075e7e7294c9"
+          }
+        }
+      }
+    }
+  },
+  "hosting": {
+    "public": "build/web",
+    "ignore": [
+      "firebase.json",
+      "**/.*",
+      "**/node_modules/**"
+    ],
+    "rewrites": [
+      {
+        "source": "**",
+        "destination": "/index.html"
+      }
+    ]
+  }
+}

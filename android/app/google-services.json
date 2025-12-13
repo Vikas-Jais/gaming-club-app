@@ -1,0 +1,47 @@
+{
+  "project_info": {
+    "project_number": "1000026373612",
+    "project_id": "future-gaming-app-iet",
+    "storage_bucket": "future-gaming-app-iet.firebasestorage.app"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:1000026373612:android:b2962f83c3127c6d7294c9",
+        "android_client_info": {
+          "package_name": "com.example.future_gaming"
+        }
+      },
+      "oauth_client": [
+        {
+          "client_id": "1000026373612-i8u236u8pu817tru7vqhpc1nrbnvgcn0.apps.googleusercontent.com",
+          "client_type": 1,
+          "android_info": {
+            "package_name": "com.example.future_gaming",
+            "certificate_hash": "78a518207a3ee611173ddac5c23681f1ef21f3ed"
+          }
+        },
+        {
+          "client_id": "1000026373612-vagp97ndt01053lhkhchs3771n4tpf2h.apps.googleusercontent.com",
+          "client_type": 3
+        }
+      ],
+      "api_key": [
+        {
+          "current_key": "AIzaSyChopEhRyl2LvRGGGn_qqLF48rxrBxZCfY"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": [
+            {
+              "client_id": "1000026373612-ae1dql1a1v85tgjm81ivtsd6c3t0m2b6.apps.googleusercontent.com",
+              "client_type": 3
+            }
+          ]
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}
