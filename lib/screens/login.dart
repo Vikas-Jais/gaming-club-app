@@ -1,5 +1,4 @@
 // lib/screens/login.dart
-import 'package:flutter_dotenv/flutter_dotenv.dart';
 import 'dart:math';
 import 'package:flutter/material.dart';
 import 'package:firebase_auth/firebase_auth.dart';
@@ -24,6 +23,10 @@ class _LoginScreenState extends State<LoginScreen>
 
   late final AnimationController _fxController;
   late final Animation<double> _heroFloat;
+
+  final GoogleSignIn _googleSignIn = GoogleSignIn(
+    scopes: ['email'],
+  );
 
   @override
   void initState() {
@@ -55,11 +58,12 @@ class _LoginScreenState extends State<LoginScreen>
         password: passwordController.text.trim(),
       );
 
+      if (!mounted) return;
       Navigator.pushReplacementNamed(context, '/game-select');
     } catch (e) {
       _showError(e.toString());
     } finally {
-      setState(() => loading = false);
+      if (mounted) setState(() => loading = false);
     }
   }
 
@@ -86,11 +90,12 @@ class _LoginScreenState extends State<LoginScreen>
         'createdAt': FieldValue.serverTimestamp(),
       });
 
+      if (!mounted) return;
       Navigator.pushReplacementNamed(context, '/game-select');
     } catch (e) {
       _showError(e.toString());
     } finally {
-      setState(() => loading = false);
+      if (mounted) setState(() => loading = false);
     }
   }
 
@@ -100,35 +105,43 @@ class _LoginScreenState extends State<LoginScreen>
       _showError("Enter email for reset");
       return;
     }
-    await FirebaseAuth.instance
-        .sendPasswordResetEmail(email: emailController.text.trim());
 
-    ScaffoldMessenger.of(context)
-        .showSnackBar(const SnackBar(content: Text("Reset email sent")));
+    try {
+      await FirebaseAuth.instance
+          .sendPasswordResetEmail(email: emailController.text.trim());
+
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text("Reset email sent")),
+      );
+    } catch (e) {
+      _showError(e.toString());
+    }
   }
 
   // ---------------- GOOGLE LOGIN ----------------
   Future<void> _signInWithGoogle() async {
     try {
-      final gUser = await GoogleSignIn().signIn();
+      final GoogleSignInAccount? gUser = await _googleSignIn.signIn();
       if (gUser == null) return;
 
-      final gAuth = await gUser.authentication;
+      final GoogleSignInAuthentication gAuth =
+          await gUser.authentication;
 
-      final cred = GoogleAuthProvider.credential(
+      final AuthCredential credential = GoogleAuthProvider.credential(
         accessToken: gAuth.accessToken,
         idToken: gAuth.idToken,
       );
 
-      final userCred =
-          await FirebaseAuth.instance.signInWithCredential(cred);
+      final UserCredential userCred =
+          await FirebaseAuth.instance.signInWithCredential(credential);
 
-      final udoc = FirebaseFirestore.instance
+      final userRef = FirebaseFirestore.instance
           .collection('users')
           .doc(userCred.user!.uid);
 
-      if (!(await udoc.get()).exists) {
-        await udoc.set({
+      if (!(await userRef.get()).exists) {
+        await userRef.set({
           'email': userCred.user!.email,
           'name': userCred.user!.displayName ?? '',
           'role': 'user',
@@ -139,15 +152,23 @@ class _LoginScreenState extends State<LoginScreen>
         });
       }
 
+      if (!mounted) return;
       Navigator.pushReplacementNamed(context, '/game-select');
-    } catch (_) {
+    } catch (e) {
       _showError("Google Login Failed");
+      debugPrint("Google Login Error: $e");
     }
   }
 
+  // ---------------- ERROR HANDLER ----------------
   void _showError(String msg) {
-    ScaffoldMessenger.of(context)
-        .showSnackBar(SnackBar(content: Text(msg)));
+    if (!mounted) return;
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        content: Text(msg),
+        backgroundColor: Colors.red,
+      ),
+    );
   }
 
   // ---------------- UI ----------------
@@ -161,10 +182,11 @@ class _LoginScreenState extends State<LoginScreen>
       body: Stack(
         children: [
           Positioned.fill(
-              child: IgnorePointer(
-                  child: CustomPaint(painter: _ParticlePainter()))),
+            child: IgnorePointer(
+              child: CustomPaint(painter: _ParticlePainter()),
+            ),
+          ),
 
-          // ✅ HERO FIXED (FULL HEIGHT — NOT CUT ANYMORE)
           AnimatedBuilder(
             animation: _heroFloat,
             builder: (_, __) {
@@ -173,33 +195,13 @@ class _LoginScreenState extends State<LoginScreen>
                 left: w * 0.04,
                 child: Image.asset(
                   "assets/images/hero.png",
-                  height: h * 0.92, // ✅ FULL SCREEN PROPORTION
+                  height: h * 0.92,
                   fit: BoxFit.contain,
                 ),
               );
             },
           ),
 
-          // GLOW BEHIND PANEL
-          Positioned(
-            top: h * 0.2,
-            right: w * 0.18,
-            child: Container(
-              width: 520,
-              height: 520,
-              decoration: BoxDecoration(
-                shape: BoxShape.circle,
-                gradient: RadialGradient(
-                  colors: [
-                    Colors.cyanAccent.withOpacity(0.15),
-                    Colors.transparent,
-                  ],
-                ),
-              ),
-            ),
-          ),
-
-          // ✅ LOGIN PANEL
           Align(
             alignment: const Alignment(0.55, 0),
             child: SingleChildScrollView(
@@ -315,8 +317,11 @@ class _LoginScreenState extends State<LoginScreen>
   }
 
   Widget _inputField(
-      IconData icon, TextEditingController c, String hint,
-      {bool obscure = false}) {
+    IconData icon,
+    TextEditingController c,
+    String hint, {
+    bool obscure = false,
+  }) {
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 14),
       decoration: BoxDecoration(
@@ -342,6 +347,7 @@ class _LoginScreenState extends State<LoginScreen>
 // ---------------- PARTICLES ----------------
 class _ParticlePainter extends CustomPainter {
   final Random _rand = Random();
+
   @override
   void paint(Canvas canvas, Size size) {
     final paint = Paint()
@@ -352,7 +358,10 @@ class _ParticlePainter extends CustomPainter {
       final dx = _rand.nextDouble() * size.width;
       final dy = _rand.nextDouble() * size.height;
       canvas.drawCircle(
-          Offset(dx, dy), _rand.nextDouble() * 3 + 0.8, paint);
+        Offset(dx, dy),
+        _rand.nextDouble() * 3 + 0.8,
+        paint,
+      );
     }
   }
 

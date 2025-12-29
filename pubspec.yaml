@@ -38,7 +38,7 @@ dependencies:
   cloud_firestore: ^6.1.0
   firebase_auth: ^6.1.2
   http: ^1.2.0
-  google_sign_in: ^7.2.0
+  google_sign_in: ^6.2.1
   flutter_dotenv: ^6.0.0
 
 
@@ -61,6 +61,10 @@ flutter:
   assets:
     - assets/images/google_logo.png
     - assets/images/hero.png
+    - assets/games/bgmi.jpg
+    - assets/games/valorant.jpg
+    - assets/games/cod.jpg
+    - assets/games/freefire.jpg
 
   # The following line ensures that the Material Icons font is
   # included with your application, so that you can use the icons in

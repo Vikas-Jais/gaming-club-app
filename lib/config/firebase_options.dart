@@ -51,7 +51,7 @@ class DefaultFirebaseOptions {
   }
 
   static const FirebaseOptions web = FirebaseOptions(
-    apiKey: dotenv.env['FIREBASE_API_KEY'],
+    apiKey: "AIzaSyB75qbYLXR35Lt_Pza8G3eDG741qSrzYbo",
     appId: '1:1000026373612:web:2314766c5d075e7e7294c9',
     messagingSenderId: '1000026373612',
     projectId: 'future-gaming-app-iet',
@@ -60,7 +60,7 @@ class DefaultFirebaseOptions {
   );
 
   static const FirebaseOptions android = FirebaseOptions(
-    apiKey: dotenv.env['FIREBASE_API_KEY'],
+    apiKey: "AIzaSyB75qbYLXR35Lt_Pza8G3eDG741qSrzYbo",
     appId: '1:1000026373612:android:b2962f83c3127c6d7294c9',
     messagingSenderId: '1000026373612',
     projectId: 'future-gaming-app-iet',
