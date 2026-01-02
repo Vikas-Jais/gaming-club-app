@@ -1,5 +1,6 @@
 import 'dart:math';
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 
@@ -11,11 +12,6 @@ class GameSelectScreen extends StatefulWidget {
 }
 
 class _GameSelectScreenState extends State<GameSelectScreen> {
-  final ScrollController _controller = ScrollController();
-
-  final double cardWidth = 360;
-  final double spacing = 30;
-
   int hovered = -1;
 
   final List<Map<String, dynamic>> games = [
@@ -45,174 +41,245 @@ class _GameSelectScreenState extends State<GameSelectScreen> {
     },
   ];
 
-  @override
-  void initState() {
-    super.initState();
-    WidgetsBinding.instance.addPostFrameCallback((_) {
-      final screen = MediaQuery.of(context).size.width;
-      final start = (cardWidth + spacing) * 0 - screen / 2 + cardWidth / 2;
-      _controller.jumpTo(max(0, start));
-    });
-  }
-
-  double _getScale(int index) {
-    if (!_controller.hasClients) return 1;
-
-    double center =
-        _controller.offset + MediaQuery.of(context).size.width / 2;
-
-    double cardCenter =
-        index * (cardWidth + spacing) + cardWidth / 2;
-
-    double distance = (center - cardCenter).abs();
-    double scale = 1 - min(distance / 800, 0.35);
-    return scale;
-  }
-
+  // 🔥 THIS IS THE CRITICAL FIX
   Future<void> _selectGame(String game) async {
-    final user = FirebaseAuth.instance.currentUser;
-    await FirebaseFirestore.instance
-        .collection('users')
-        .doc(user!.uid)
-        .update({'selectedGame': game});
+    SystemSound.play(SystemSoundType.click);
 
-    Navigator.pushReplacementNamed(context, '/home');
+    final user = FirebaseAuth.instance.currentUser!;
+    final db = FirebaseFirestore.instance;
+
+    final userDoc = await db.collection("users").doc(user.uid).get();
+
+    // Save selected game
+    await db.collection("users").doc(user.uid).set({
+      "selectedGame": game,
+    }, SetOptions(merge: true));
+
+    final data = userDoc.data() ?? {};
+    final profiles = data["profiles"] ?? {};
+
+    // Check if profile already exists for this game
+    if (profiles[game] != null) {
+      Navigator.pushReplacementNamed(context, "/home");
+    } else {
+      Navigator.pushReplacementNamed(context, "/profile-setup");
+    }
   }
 
   @override
   Widget build(BuildContext context) {
     return Scaffold(
       backgroundColor: const Color(0xFF020617),
-      body: Column(
+      body: Stack(
         children: [
-          const SizedBox(height: 40),
-          const Text(
-            "SELECT PROTOCOL",
-            style: TextStyle(
-                fontSize: 36,
-                fontWeight: FontWeight.w900,
-                letterSpacing: 4,
-                color: Colors.white),
-          ),
-          const SizedBox(height: 10),
-          const Text("Choose your battleground",
-              style: TextStyle(color: Colors.white70)),
-          const SizedBox(height: 30),
+          const AnimatedBackground(),
 
-          Expanded(
-            child: ListView.builder(
-              controller: _controller,
-              scrollDirection: Axis.horizontal,
-              physics: const BouncingScrollPhysics(),
-              padding: EdgeInsets.symmetric(
-                horizontal:
-                    MediaQuery.of(context).size.width / 2 - cardWidth / 2,
+          Column(
+            children: [
+              const SizedBox(height: 40),
+              const Text(
+                "SELECT PROTOCOL",
+                style: TextStyle(
+                  fontSize: 36,
+                  fontWeight: FontWeight.w900,
+                  color: Colors.white,
+                  letterSpacing: 4,
+                ),
               ),
-              itemCount: games.length,
-              itemBuilder: (context, i) {
-                final String name = games[i]["name"] as String;
-                final String type = games[i]["type"] as String;
-                final String image = games[i]["image"] as String;
-                final Color glow = games[i]["color"] as Color;
+              const SizedBox(height: 8),
+              const Text("Choose your battleground",
+                  style: TextStyle(color: Colors.white70)),
+              const SizedBox(height: 30),
 
-                return AnimatedBuilder(
-                  animation: _controller,
-                  builder: (context, child) {
-                    final scale = _getScale(i);
-
+              Expanded(
+                child: ListView.builder(
+                  scrollDirection: Axis.horizontal,
+                  physics: const BouncingScrollPhysics(),
+                  padding: const EdgeInsets.symmetric(horizontal: 40),
+                  itemCount: games.length,
+                  itemBuilder: (context, index) {
                     return Padding(
-                      padding: const EdgeInsets.symmetric(horizontal: 15),
-                      child: MouseRegion(
-                        onEnter: (_) => setState(() => hovered = i),
-                        onExit: (_) => setState(() => hovered = -1),
-                        child: GestureDetector(
-                          onTap: () => _selectGame(name),
-                          child: Transform.scale(
-                            scale: hovered == i ? scale * 1.05 : scale,
-                            child: Container(
-                              width: cardWidth,
-                              decoration: BoxDecoration(
-                                borderRadius: BorderRadius.circular(26),
-                                boxShadow: [
-                                  BoxShadow(
-                                    color: glow.withOpacity(scale),
-                                    blurRadius: 50,
-                                    spreadRadius: 4,
-                                  )
-                                ],
-                              ),
-                              child: ClipRRect(
-                                borderRadius: BorderRadius.circular(26),
-                                child: Stack(
-                                  children: [
-                                    Positioned.fill(
-                                      child: Image.asset(image,
-                                          fit: BoxFit.cover),
-                                    ),
-                                    Positioned.fill(
-                                      child: Container(
-                                        decoration: BoxDecoration(
-                                          gradient: LinearGradient(
-                                            begin: Alignment.topCenter,
-                                            end: Alignment.bottomCenter,
-                                            colors: [
-                                              Colors.transparent,
-                                              Colors.black.withOpacity(0.85)
-                                            ],
-                                          ),
-                                        ),
-                                      ),
-                                    ),
-                                    Positioned(
-                                      left: 20,
-                                      top: 20,
-                                      child: Container(
-                                        padding: const EdgeInsets.symmetric(
-                                            horizontal: 12, vertical: 6),
-                                        decoration: BoxDecoration(
-                                          color: glow,
-                                          borderRadius:
-                                              BorderRadius.circular(10),
-                                        ),
-                                        child: Text(type,
-                                            style: const TextStyle(
-                                                color: Colors.black,
-                                                fontWeight: FontWeight.bold)),
-                                      ),
-                                    ),
-                                    Positioned(
-                                      left: 24,
-                                      bottom: 28,
-                                      child: Text(
-                                        name,
-                                        style: TextStyle(
-                                          fontSize: 30,
-                                          fontWeight: FontWeight.bold,
-                                          letterSpacing: 3,
-                                          color: glow,
-                                          shadows: [
-                                            Shadow(
-                                                color: glow,
-                                                blurRadius: 30)
-                                          ],
-                                        ),
-                                      ),
-                                    ),
-                                  ],
-                                ),
-                              ),
-                            ),
-                          ),
-                        ),
+                      padding: const EdgeInsets.symmetric(horizontal: 22),
+                      child: _PremiumCard(
+                        data: games[index],
+                        isHover: hovered == index,
+                        onHover: (h) => setState(() => hovered = h ? index : -1),
+                        onTap: () => _selectGame(games[index]["name"]),
                       ),
                     );
                   },
-                );
-              },
-            ),
+                ),
+              ),
+
+              const SizedBox(height: 40),
+            ],
           ),
         ],
       ),
     );
   }
+}
+
+/* ---------------- PREMIUM TILT CARD ---------------- */
+
+class _PremiumCard extends StatefulWidget {
+  final Map<String, dynamic> data;
+  final bool isHover;
+  final Function(bool) onHover;
+  final VoidCallback onTap;
+
+  const _PremiumCard(
+      {required this.data,
+      required this.isHover,
+      required this.onHover,
+      required this.onTap});
+
+  @override
+  State<_PremiumCard> createState() => _PremiumCardState();
+}
+
+class _PremiumCardState extends State<_PremiumCard> {
+  double dx = 0, dy = 0;
+
+  @override
+  Widget build(BuildContext context) {
+    final Color glow = widget.data["color"];
+
+    return MouseRegion(
+      onEnter: (_) => widget.onHover(true),
+      onExit: (_) {
+        widget.onHover(false);
+        setState(() {
+          dx = 0;
+          dy = 0;
+        });
+      },
+      onHover: (e) {
+        final size = context.size!;
+        setState(() {
+          dx = (e.localPosition.dx - size.width / 2) / 40;
+          dy = (e.localPosition.dy - size.height / 2) / 40;
+        });
+      },
+      cursor: SystemMouseCursors.click,
+      child: GestureDetector(
+        onTap: widget.onTap,
+        child: AnimatedContainer(
+          duration: const Duration(milliseconds: 200),
+          width: 300,
+          height: 420,
+          transform: Matrix4.identity()
+            ..setEntry(3, 2, 0.0015)
+            ..rotateX(-dy * pi / 180)
+            ..rotateY(dx * pi / 180)
+            ..scale(widget.isHover ? 1.06 : 1.0),
+          decoration: BoxDecoration(
+            borderRadius: BorderRadius.circular(24),
+            boxShadow: [
+              BoxShadow(
+                color: glow.withOpacity(widget.isHover ? 0.7 : 0.3),
+                blurRadius: widget.isHover ? 35 : 18,
+              )
+            ],
+          ),
+          child: ClipRRect(
+            borderRadius: BorderRadius.circular(24),
+            child: Stack(
+              children: [
+                Positioned.fill(
+                    child:
+                        Image.asset(widget.data["image"], fit: BoxFit.cover)),
+                Positioned.fill(
+                  child: Container(
+                    decoration: const BoxDecoration(
+                      gradient: LinearGradient(
+                        begin: Alignment.topCenter,
+                        end: Alignment.bottomCenter,
+                        colors: [Colors.transparent, Colors.black87],
+                      ),
+                    ),
+                  ),
+                ),
+                Positioned(
+                  left: 16,
+                  top: 16,
+                  child: Container(
+                    padding:
+                        const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+                    decoration: BoxDecoration(
+                        color: glow,
+                        borderRadius: BorderRadius.circular(8)),
+                    child: Text(widget.data["type"],
+                        style: const TextStyle(
+                            color: Colors.black, fontWeight: FontWeight.bold)),
+                  ),
+                ),
+                Positioned(
+                  left: 20,
+                  bottom: 26,
+                  child: Text(
+                    widget.data["name"],
+                    style: TextStyle(
+                      fontSize: 28,
+                      fontWeight: FontWeight.bold,
+                      color: glow,
+                      shadows: [
+                        Shadow(color: glow.withOpacity(0.8), blurRadius: 20)
+                      ],
+                    ),
+                  ),
+                )
+              ],
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+/* ---------------- BACKGROUND FX ---------------- */
+
+class AnimatedBackground extends StatefulWidget {
+  const AnimatedBackground({super.key});
+  @override
+  State<AnimatedBackground> createState() => _AnimatedBackgroundState();
+}
+
+class _AnimatedBackgroundState extends State<AnimatedBackground>
+    with SingleTickerProviderStateMixin {
+  late final AnimationController _ctrl =
+      AnimationController(vsync: this, duration: const Duration(seconds: 20))
+        ..repeat();
+
+  @override
+  Widget build(BuildContext context) {
+    return AnimatedBuilder(
+      animation: _ctrl,
+      builder: (_, __) {
+        return CustomPaint(
+          painter: _BGFX(_ctrl.value),
+          size: MediaQuery.of(context).size,
+        );
+      },
+    );
+  }
+}
+
+class _BGFX extends CustomPainter {
+  final double t;
+  _BGFX(this.t);
+
+  @override
+  void paint(Canvas c, Size s) {
+    final paint = Paint()..color = Colors.cyanAccent.withOpacity(0.06);
+    for (int i = 0; i < 40; i++) {
+      final x = (s.width * (i / 40)) + sin(t * 5 + i) * 50;
+      final y = (s.height * ((i * 17) % 40) / 40) + cos(t * 4 + i) * 50;
+      c.drawCircle(Offset(x, y), 6, paint);
+    }
+  }
+
+  @override
+  bool shouldRepaint(covariant _BGFX old) => true;
 }

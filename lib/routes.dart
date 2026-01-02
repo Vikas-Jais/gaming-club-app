@@ -7,7 +7,7 @@ import 'screens/login.dart';
 import 'screens/home.dart';
 import 'screens/profile.dart';
 import 'screens/leaderboard.dart';
-import 'screens/tournaments.dart';   // ✅ fixed file name
+import 'screens/tournaments.dart';
 import 'screens/clans.dart';
 import 'screens/live_stats.dart';
 import 'screens/tournaments_bgmi.dart';
@@ -19,10 +19,9 @@ import 'screens/valorant_history.dart';
 import 'screens/valorant_live.dart';
 import 'screens/valorant_agents.dart';
 import 'screens/valorant_dashboard.dart';
-import 'screens/valorant_leaderboard.dart'; // if you have it
+import 'screens/valorant_leaderboard.dart';
 import 'screens/valorant_matches.dart';
-
-
+import 'screens/profile_setup.dart';
 
 // Admin Screens
 import 'screens/admin_panel.dart';
@@ -37,10 +36,12 @@ class AppRoutes {
     '/home': (context) => const HomeScreen(),
     '/profile': (context) => const ProfileScreen(),
     '/leaderboard': (context) => const LeaderboardScreen(),
-    '/tournaments': (context) => const TournamentScreen(), // ✅ class name
+    '/tournaments': (context) => const TournamentScreen(),
     '/clans': (context) => const ClansScreen(),
     '/live': (context) => const LiveStatsScreen(),
     '/game-select': (context) => const GameSelectScreen(),
+
+    // Game specific
     '/tournaments-bgmi': (context) => const BGMITournamentsScreen(),
     '/tournaments-valorant': (context) => const ValorantTournamentsScreen(),
     '/valorant-search': (context) => const ValorantSearchScreen(),
@@ -50,27 +51,25 @@ class AppRoutes {
     '/valorant-live': (context) => const ValorantLiveScreen(),
     '/valorant-agents': (context) => const ValorantAgentsScreen(),
     '/valorant-dashboard': (context) => const ValorantDashboardScreen(),
-    '/valorant-leaderboard': (context) => const ValorantLeaderboardScreen(), // optional
+    '/valorant-leaderboard': (context) => const ValorantLeaderboardScreen(),
     '/valorant-matches': (context) => const ValorantMatchesScreen(),
 
-
-
-
+    // 🔥 Profile Setup Route with Game Argument
+    '/profile-setup': (context) {
+      final game =
+          ModalRoute.of(context)!.settings.arguments as String; // bgmi, valorant
+      return ProfileSetupScreen(game: game);
+    },
 
     // ✅ Admin routes protected by guard
     '/admin': (context) => const AdminGuard(child: AdminPanelScreen()),
-
     '/admin-users': (context) =>
         const AdminGuard(child: AdminUsersScreen()),
-
     '/admin-tournaments': (context) =>
         const AdminGuard(child: AdminTournamentsScreen()),
-
     '/admin-news': (context) =>
         const AdminGuard(child: AdminNewsScreen()),
-
     '/admin-settings': (context) =>
         const AdminGuard(child: AdminSettingsScreen()),
   };
 }
-
