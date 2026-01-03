@@ -23,6 +23,7 @@ import 'screens/valorant_leaderboard.dart';
 import 'screens/valorant_matches.dart';
 import 'screens/profile_setup.dart';
 
+
 // Admin Screens
 import 'screens/admin_panel.dart';
 import 'screens/admin_users.dart';
@@ -54,14 +55,7 @@ class AppRoutes {
     '/valorant-leaderboard': (context) => const ValorantLeaderboardScreen(),
     '/valorant-matches': (context) => const ValorantMatchesScreen(),
 
-    // 🔥 Profile Setup Route with Game Argument
-    '/profile-setup': (context) {
-      final game =
-          ModalRoute.of(context)!.settings.arguments as String; // bgmi, valorant
-      return ProfileSetupScreen(game: game);
-    },
-
-    // ✅ Admin routes protected by guard
+    // Admin
     '/admin': (context) => const AdminGuard(child: AdminPanelScreen()),
     '/admin-users': (context) =>
         const AdminGuard(child: AdminUsersScreen()),

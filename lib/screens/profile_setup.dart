@@ -1,6 +1,10 @@
 import 'package:flutter/material.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
+import 'package:cloud_functions/cloud_functions.dart';
+
+final FirebaseFunctions functions =
+    FirebaseFunctions.instanceFor(region: "us-central1");
 
 class ProfileSetupScreen extends StatefulWidget {
   final String game; // bgmi, valorant, cod, freefire
@@ -14,11 +18,14 @@ class ProfileSetupScreen extends StatefulWidget {
 class _ProfileSetupScreenState extends State<ProfileSetupScreen> {
   final _ignCtrl = TextEditingController();
   final _idCtrl = TextEditingController();
+
   bool loading = false;
   String? error;
 
+  String get gameKey => widget.game.toLowerCase();
+
   String get gameName {
-    switch (widget.game) {
+    switch (gameKey) {
       case "bgmi":
         return "BGMI";
       case "valorant":
@@ -32,10 +39,31 @@ class _ProfileSetupScreenState extends State<ProfileSetupScreen> {
     }
   }
 
-  Future<bool> _playerIdExists(String id) async {
-    final doc =
-        await FirebaseFirestore.instance.collection("players").doc(id).get();
-    return doc.exists;
+  // 🔥 Riot Verification
+  Future<Map<String, dynamic>> _verifyValorant(String riotId) async {
+    final parts = riotId.split("#");
+    if (parts.length != 2) {
+      throw Exception("INVALID_FORMAT");
+    }
+
+    final callable = functions.httpsCallable("verifyValorant");
+
+    final res = await callable.call({
+      "gameName": parts[0], // AgentX124
+      "tagLine": parts[1],  // Luffy
+      "region": "asia",    // ✅ THIS IS THE FIX (India / SEA routing)
+    });
+
+    // Debug log
+    print("VALORANT RESPONSE => ${res.data}");
+
+    final data = Map<String, dynamic>.from(res.data);
+
+    if (data["success"] != true) {
+      throw Exception("RIOT_NOT_FOUND");
+    }
+
+    return data;
   }
 
   Future<void> _submit() async {
@@ -53,45 +81,91 @@ class _ProfileSetupScreenState extends State<ProfileSetupScreen> {
     });
 
     try {
-      if (await _playerIdExists(pid)) {
-        setState(() {
-          loading = false;
-          error = "Player ID already taken";
+      final user = FirebaseAuth.instance.currentUser!;
+      final db = FirebaseFirestore.instance;
+
+      // 🔥 REAL VALORANT API FLOW
+      if (gameKey == "valorant") {
+        if (!pid.contains("#")) {
+          setState(() {
+            error = "Format must be like AgentX124#Luffy";
+            loading = false;
+          });
+          return;
+        }
+
+        final riotData = await _verifyValorant(pid);
+
+        final puuid = riotData["puuid"];
+
+        await db.collection("users").doc(user.uid).set({
+          "profiles": {
+            "valorant": {
+              "ign": ign,
+              "riotId": pid,
+              "puuid": puuid,
+              "verified": true,
+              "region": riotData["region"],
+              "createdAt": FieldValue.serverTimestamp(),
+            }
+          }
+        }, SetOptions(merge: true));
+
+        await db.collection("valorant_players").doc(puuid).set({
+          "uid": user.uid,
+          "riotId": pid,
+          "lastSync": FieldValue.serverTimestamp(),
         });
+
+        Navigator.pushReplacementNamed(context, "/home");
         return;
       }
 
-      final user = FirebaseAuth.instance.currentUser!;
-      final userRef =
-          FirebaseFirestore.instance.collection("users").doc(user.uid);
+      // 🧩 Other games (BGMI / COD / FF)
+      final playerRef = db.collection("players").doc(pid);
+      final userRef = db.collection("users").doc(user.uid);
 
-      // Create profile for this game
-      await userRef.set({
-        "profiles": {
-          widget.game: {
-            "ign": ign,
-            "playerId": pid,
-            "rank": "Unranked",
-            "xp": 0,
-            "level": 1,
-            "badge": "Rookie",
-            "createdAt": FieldValue.serverTimestamp(),
+      await db.runTransaction((tx) async {
+        final snap = await tx.get(playerRef);
+        if (snap.exists) throw Exception("PLAYER_ID_EXISTS");
+
+        tx.set(playerRef, {
+          "uid": user.uid,
+          "game": gameKey,
+          "createdAt": FieldValue.serverTimestamp(),
+        });
+
+        tx.set(userRef, {
+          "profiles": {
+            gameKey: {
+              "ign": ign,
+              "playerId": pid,
+              "rank": "Unranked",
+              "xp": 0,
+              "level": 1,
+              "badge": "Rookie",
+              "verified": false,
+              "createdAt": FieldValue.serverTimestamp(),
+            }
           }
-        }
-      }, SetOptions(merge: true));
-
-      // Global unique registry
-      await FirebaseFirestore.instance
-          .collection("players")
-          .doc(pid)
-          .set({"uid": user.uid, "game": widget.game});
+        }, SetOptions(merge: true));
+      });
 
       Navigator.pushReplacementNamed(context, "/home");
     } catch (e) {
-      setState(() {
-        loading = false;
-        error = "Something went wrong";
-      });
+      final msg = e.toString();
+
+      if (msg.contains("INVALID_FORMAT")) {
+        error = "Format must be like AgentX124#Luffy";
+      } else if (msg.contains("RIOT_NOT_FOUND")) {
+        error = "Valorant account not found";
+      } else if (msg.contains("PLAYER_ID_EXISTS")) {
+        error = "Player ID already taken";
+      } else {
+        error = "Verification failed. Try again.";
+      }
+
+      setState(() => loading = false);
     }
   }
 
@@ -136,7 +210,7 @@ class _ProfileSetupScreenState extends State<ProfileSetupScreen> {
 
                 _input("In-Game Name", _ignCtrl),
                 const SizedBox(height: 20),
-                _input("Player ID (Unique)", _idCtrl),
+                _input("Riot ID (AgentX124#Luffy)", _idCtrl),
 
                 if (error != null) ...[
                   const SizedBox(height: 16),
@@ -162,8 +236,9 @@ class _ProfileSetupScreenState extends State<ProfileSetupScreen> {
                         : const Text(
                             "CREATE PROFILE",
                             style: TextStyle(
-                                fontWeight: FontWeight.bold,
-                                letterSpacing: 2),
+                              fontWeight: FontWeight.bold,
+                              letterSpacing: 2,
+                            ),
                           ),
                   ),
                 )

@@ -1,8 +1,9 @@
 import 'dart:math';
 import 'package:flutter/material.dart';
-import 'package:flutter/services.dart';
+import 'package:flutter/services.dart'; // 🔊 Native click sound
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
+import 'profile_setup.dart';
 
 class GameSelectScreen extends StatefulWidget {
   const GameSelectScreen({super.key});
@@ -41,30 +42,40 @@ class _GameSelectScreenState extends State<GameSelectScreen> {
     },
   ];
 
-  // 🔥 THIS IS THE CRITICAL FIX
+  void _playClick() {
+    SystemSound.play(SystemSoundType.click);
+  }
+
+  // 🔥 FIXED FLOW
   Future<void> _selectGame(String game) async {
     SystemSound.play(SystemSoundType.click);
 
     final user = FirebaseAuth.instance.currentUser!;
-    final db = FirebaseFirestore.instance;
-
-    final userDoc = await db.collection("users").doc(user.uid).get();
+    final userRef = FirebaseFirestore.instance.collection('users').doc(user.uid);
 
     // Save selected game
-    await db.collection("users").doc(user.uid).set({
-      "selectedGame": game,
+    await userRef.set({
+      "selectedGame": game.toLowerCase(),
     }, SetOptions(merge: true));
 
-    final data = userDoc.data() ?? {};
-    final profiles = data["profiles"] ?? {};
+    // Check if profile already exists
+    final doc = await userRef.get();
+    final profiles = doc.data()?["profiles"] ?? {};
 
-    // Check if profile already exists for this game
-    if (profiles[game] != null) {
-      Navigator.pushReplacementNamed(context, "/home");
+    if (profiles[game.toLowerCase()] == null) {
+      // No profile → go to setup
+      Navigator.pushReplacement(
+        context,
+        MaterialPageRoute(
+          builder: (_) => ProfileSetupScreen(game: game.toLowerCase()),
+        ),
+      );
     } else {
-      Navigator.pushReplacementNamed(context, "/profile-setup");
+      // Profile exists → go home
+      Navigator.pushReplacementNamed(context, "/home");
     }
   }
+
 
   @override
   Widget build(BuildContext context) {
@@ -87,27 +98,29 @@ class _GameSelectScreenState extends State<GameSelectScreen> {
                 ),
               ),
               const SizedBox(height: 8),
-              const Text("Choose your battleground",
-                  style: TextStyle(color: Colors.white70)),
-              const SizedBox(height: 30),
+              const Text(
+                "Choose your battleground",
+                style: TextStyle(color: Colors.white70),
+              ),
+              const SizedBox(height: 40),
 
+              /// Horizontal Netflix row
               Expanded(
-                child: ListView.builder(
-                  scrollDirection: Axis.horizontal,
-                  physics: const BouncingScrollPhysics(),
-                  padding: const EdgeInsets.symmetric(horizontal: 40),
-                  itemCount: games.length,
-                  itemBuilder: (context, index) {
-                    return Padding(
-                      padding: const EdgeInsets.symmetric(horizontal: 22),
-                      child: _PremiumCard(
-                        data: games[index],
-                        isHover: hovered == index,
-                        onHover: (h) => setState(() => hovered = h ? index : -1),
-                        onTap: () => _selectGame(games[index]["name"]),
-                      ),
-                    );
-                  },
+                child: RotatedBox(
+                  quarterTurns: -1,
+                  child: ListView.builder(
+                    physics: const BouncingScrollPhysics(),
+                    itemCount: games.length,
+                    itemBuilder: (context, index) {
+                      return RotatedBox(
+                        quarterTurns: 1,
+                        child: Padding(
+                          padding: const EdgeInsets.symmetric(horizontal: 28),
+                          child: _card(games[index], index),
+                        ),
+                      );
+                    },
+                  ),
                 ),
               ),
 
@@ -118,118 +131,100 @@ class _GameSelectScreenState extends State<GameSelectScreen> {
       ),
     );
   }
-}
 
-/* ---------------- PREMIUM TILT CARD ---------------- */
-
-class _PremiumCard extends StatefulWidget {
-  final Map<String, dynamic> data;
-  final bool isHover;
-  final Function(bool) onHover;
-  final VoidCallback onTap;
-
-  const _PremiumCard(
-      {required this.data,
-      required this.isHover,
-      required this.onHover,
-      required this.onTap});
-
-  @override
-  State<_PremiumCard> createState() => _PremiumCardState();
-}
-
-class _PremiumCardState extends State<_PremiumCard> {
-  double dx = 0, dy = 0;
-
-  @override
-  Widget build(BuildContext context) {
-    final Color glow = widget.data["color"];
+  Widget _card(Map<String, dynamic> g, int index) {
+    final bool isHover = hovered == index;
+    final Color glow = g["color"];
 
     return MouseRegion(
-      onEnter: (_) => widget.onHover(true),
-      onExit: (_) {
-        widget.onHover(false);
-        setState(() {
-          dx = 0;
-          dy = 0;
-        });
-      },
-      onHover: (e) {
-        final size = context.size!;
-        setState(() {
-          dx = (e.localPosition.dx - size.width / 2) / 40;
-          dy = (e.localPosition.dy - size.height / 2) / 40;
-        });
-      },
+      onEnter: (_) => setState(() => hovered = index),
+      onExit: (_) => setState(() => hovered = -1),
       cursor: SystemMouseCursors.click,
       child: GestureDetector(
-        onTap: widget.onTap,
-        child: AnimatedContainer(
-          duration: const Duration(milliseconds: 200),
-          width: 300,
-          height: 420,
-          transform: Matrix4.identity()
-            ..setEntry(3, 2, 0.0015)
-            ..rotateX(-dy * pi / 180)
-            ..rotateY(dx * pi / 180)
-            ..scale(widget.isHover ? 1.06 : 1.0),
-          decoration: BoxDecoration(
-            borderRadius: BorderRadius.circular(24),
-            boxShadow: [
-              BoxShadow(
-                color: glow.withOpacity(widget.isHover ? 0.7 : 0.3),
-                blurRadius: widget.isHover ? 35 : 18,
-              )
-            ],
-          ),
-          child: ClipRRect(
-            borderRadius: BorderRadius.circular(24),
-            child: Stack(
-              children: [
-                Positioned.fill(
-                    child:
-                        Image.asset(widget.data["image"], fit: BoxFit.cover)),
-                Positioned.fill(
-                  child: Container(
-                    decoration: const BoxDecoration(
-                      gradient: LinearGradient(
-                        begin: Alignment.topCenter,
-                        end: Alignment.bottomCenter,
-                        colors: [Colors.transparent, Colors.black87],
+        onTap: () {
+          _playClick();
+          _selectGame(g["name"]);
+        },
+        child: AnimatedScale(
+          scale: isHover ? 1.12 : 1,
+          duration: const Duration(milliseconds: 250),
+          child: AnimatedContainer(
+            duration: const Duration(milliseconds: 250),
+            width: 300,
+            height: 420,
+            decoration: BoxDecoration(
+              borderRadius: BorderRadius.circular(24),
+              boxShadow: [
+                BoxShadow(
+                  color: glow.withOpacity(isHover ? 0.9 : 0.35),
+                  blurRadius: isHover ? 50 : 25,
+                  spreadRadius: 2,
+                )
+              ],
+            ),
+            child: ClipRRect(
+              borderRadius: BorderRadius.circular(24),
+              child: Stack(
+                children: [
+                  Positioned.fill(
+                    child: Image.asset(
+                      g["image"],
+                      fit: BoxFit.cover,
+                    ),
+                  ),
+                  Positioned.fill(
+                    child: Container(
+                      decoration: BoxDecoration(
+                        gradient: LinearGradient(
+                          begin: Alignment.topCenter,
+                          end: Alignment.bottomCenter,
+                          colors: [
+                            Colors.transparent,
+                            Colors.black.withOpacity(0.85),
+                          ],
+                        ),
                       ),
                     ),
                   ),
-                ),
-                Positioned(
-                  left: 16,
-                  top: 16,
-                  child: Container(
-                    padding:
-                        const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
-                    decoration: BoxDecoration(
+                  Positioned(
+                    left: 16,
+                    top: 16,
+                    child: Container(
+                      padding: const EdgeInsets.symmetric(
+                          horizontal: 14, vertical: 6),
+                      decoration: BoxDecoration(
                         color: glow,
-                        borderRadius: BorderRadius.circular(8)),
-                    child: Text(widget.data["type"],
+                        borderRadius: BorderRadius.circular(10),
+                      ),
+                      child: Text(
+                        g["type"],
                         style: const TextStyle(
-                            color: Colors.black, fontWeight: FontWeight.bold)),
-                  ),
-                ),
-                Positioned(
-                  left: 20,
-                  bottom: 26,
-                  child: Text(
-                    widget.data["name"],
-                    style: TextStyle(
-                      fontSize: 28,
-                      fontWeight: FontWeight.bold,
-                      color: glow,
-                      shadows: [
-                        Shadow(color: glow.withOpacity(0.8), blurRadius: 20)
-                      ],
+                          color: Colors.black,
+                          fontWeight: FontWeight.bold,
+                        ),
+                      ),
                     ),
                   ),
-                )
-              ],
+                  Positioned(
+                    left: 20,
+                    bottom: 28,
+                    child: Text(
+                      g["name"],
+                      style: TextStyle(
+                        fontSize: 28,
+                        fontWeight: FontWeight.bold,
+                        color: glow,
+                        shadows: [
+                          Shadow(
+                            color: glow.withOpacity(0.9),
+                            blurRadius: 25,
+                          )
+                        ],
+                      ),
+                    ),
+                  ),
+                ],
+              ),
             ),
           ),
         ),
@@ -242,6 +237,7 @@ class _PremiumCardState extends State<_PremiumCard> {
 
 class AnimatedBackground extends StatefulWidget {
   const AnimatedBackground({super.key});
+
   @override
   State<AnimatedBackground> createState() => _AnimatedBackgroundState();
 }
@@ -264,6 +260,12 @@ class _AnimatedBackgroundState extends State<AnimatedBackground>
       },
     );
   }
+
+  @override
+  void dispose() {
+    _ctrl.dispose();
+    super.dispose();
+  }
 }
 
 class _BGFX extends CustomPainter {
@@ -272,11 +274,25 @@ class _BGFX extends CustomPainter {
 
   @override
   void paint(Canvas c, Size s) {
-    final paint = Paint()..color = Colors.cyanAccent.withOpacity(0.06);
+    final Paint glow = Paint()
+      ..shader = LinearGradient(
+        colors: [
+          Colors.cyanAccent.withOpacity(0.08),
+          Colors.purpleAccent.withOpacity(0.05),
+          Colors.transparent,
+        ],
+        begin: Alignment.topLeft,
+        end: Alignment.bottomRight,
+      ).createShader(Rect.fromLTWH(0, 0, s.width, s.height));
+
+    c.drawRect(Rect.fromLTWH(0, 0, s.width, s.height), glow);
+
+    final Paint particle = Paint()..color = Colors.cyanAccent.withOpacity(0.08);
+
     for (int i = 0; i < 40; i++) {
-      final x = (s.width * (i / 40)) + sin(t * 5 + i) * 50;
-      final y = (s.height * ((i * 17) % 40) / 40) + cos(t * 4 + i) * 50;
-      c.drawCircle(Offset(x, y), 6, paint);
+      final x = (s.width * (i / 40)) + sin(t * 6 + i) * 40;
+      final y = (s.height * ((i * 19) % 40) / 40) + cos(t * 4 + i) * 40;
+      c.drawCircle(Offset(x, y), 6, particle);
     }
   }
 
